@@ -27,7 +27,7 @@ const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
             {label}
           </label>
         )}
@@ -59,10 +59,10 @@ const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputProps>(
           )}
         </div>
         {error && (
-          <p className="mt-1 text-sm text-red-600">{error}</p>
+          <p className="mt-1 text-sm text-error">{error}</p>
         )}
         {helperText && !error && (
-          <p className="mt-1 text-sm text-gray-500">{helperText}</p>
+          <p className="mt-1 text-sm text-gray-600">{helperText}</p>
         )}
       </div>
     );

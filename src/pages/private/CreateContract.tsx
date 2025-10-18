@@ -5,12 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCreateContract } from '../../hooks/useContracts';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useTranslationDebug } from '../../contexts/TranslationDebugContext';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { RichTextEditor } from '../../components/editor/RichTextEditor';
 import { FileUpload } from '../../components/common/FileUpload';
+import { TranslationDebugger } from '../../components/debug/TranslationDebugger';
 import { useContractAI } from '../../hooks/useContractAI';
-import { checkAIFeatures, proofreadText, rewriteText, translateText } from '../../services/ai/contract-ai';
+import { checkAIFeatures, proofreadText, rewriteText, translateText, setTranslationDebugCallback, proofreadSelection } from '../../services/ai/contract-ai';
 import { 
   PlusIcon, 
   DocumentArrowUpIcon
@@ -29,6 +31,7 @@ type ContractFormData = z.infer<typeof contractSchema>;
 export default function CreateContract() {
   const navigate = useNavigate();
   const { availableLanguages, userLanguage } = useLanguage();
+  const { debugData, addDebugEntry, clearDebugData, isDebuggerVisible, toggleDebugger } = useTranslationDebug();
   const createContractMutation = useCreateContract();
   const {} = useContractAI();
   
@@ -52,6 +55,11 @@ export default function CreateContract() {
     return () => clearInterval(poll);
   }, []);
 
+  // Setup debug callback
+  useEffect(() => {
+    setTranslationDebugCallback(addDebugEntry);
+  }, [addDebugEntry]);
+
   const {
     register,
     handleSubmit,
@@ -72,7 +80,7 @@ export default function CreateContract() {
     }
     try {
       console.log('[CreateContract] Starting translation:', { text: text.substring(0, 50) + '...', targetLanguage });
-      const result = await translateText(text, targetLanguage, 'en');
+      const result = await translateText(text, targetLanguage, 'auto');
       console.log('[CreateContract] Translation result:', result);
       
       if (result.success && result.result) {
@@ -95,14 +103,25 @@ export default function CreateContract() {
     if (!aiCapabilities.proofreader) {
       throw new Error('Proofreading feature not available.');
     }
+    
     try {
-      const result = await proofreadText(text);
-      if (result.success && result.result) {
-        return result.result;
+      // Use the new proofreadSelection function with validation
+      const result = await proofreadSelection(text);
+      
+      if (result.success) {
+        // Show warning if validation detected potential issues
+        if (result.warning) {
+          toast.warning(result.warning);
+        }
+        
+        // Return the corrected text if available, otherwise return original text
+        return result.result || text;
+      } else {
+        throw new Error(result.error || 'Proofreading failed');
       }
-      throw new Error(result.error || 'Proofreading failed');
     } catch (error) {
-      throw new Error('Proofreading failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      console.error('Proofreading error:', error);
+      throw error;
     }
   }, [aiCapabilities.overall, aiCapabilities.proofreader]);
 
@@ -305,6 +324,14 @@ export default function CreateContract() {
           </div>
         </form>
       </div>
+
+      {/* Translation Debugger */}
+      <TranslationDebugger
+        isVisible={isDebuggerVisible}
+        onToggle={toggleDebugger}
+        debugData={debugData}
+        onClear={clearDebugData}
+      />
     </div>
   );
 }

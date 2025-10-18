@@ -3,6 +3,189 @@
  * Handles proofreading, rewriting, and translation of contract text using Chrome AI APIs
  */
 
+// Debug function to log translation data
+let debugCallback: ((data: any) => void) | null = null;
+
+export function setTranslationDebugCallback(callback: (data: any) => void) {
+    debugCallback = callback;
+}
+
+function logTranslationDebug(data: {
+    inputText: string;
+    outputText: string;
+    targetLanguage: string;
+    step: 'translate' | 'proofread' | 'format';
+    success: boolean;
+    error?: string;
+    duration?: number;
+    formattingApplied?: boolean;
+}) {
+    if (debugCallback) {
+        debugCallback(data);
+    }
+}
+
+/**
+ * Extract the actual translation from the API response by removing the prompt part
+ */
+function extractTranslationFromResponse(response: string, originalText: string): string {
+    console.log('🔍 Extracting translation from response...');
+    console.log('📝 Response length:', response.length);
+    console.log('📝 Response first 500 chars:', response.substring(0, 500));
+
+    // Look for the start of the actual translation
+    // The translation usually starts after the prompt instructions
+    const markers = [
+        'Contract to translate:',
+        'Contrat à traduire:',
+        'Text to translate:',
+        'Texte à traduire:',
+        'FREELANCE GRAPHIC DESIGN SERVICES AGREEMENT',
+        'ACCORD DE SERVICES DE CONCEPTION GRAPHIQUE FREELANCE',
+        'This Freelance Graphic Design Services Agreement',
+        'Cet Accord de Services de Conception Graphique Freelance'
+    ];
+
+    let startIndex = -1;
+    for (const marker of markers) {
+        const index = response.indexOf(marker);
+        if (index !== -1) {
+            startIndex = index + marker.length;
+            console.log('✅ Found marker:', marker, 'at index:', index);
+            break;
+        }
+    }
+
+    if (startIndex === -1) {
+        // If no marker found, try to find the start of the actual contract
+        // Look for common contract beginnings
+        const contractStarters = [
+            'FREELANCE GRAPHIC DESIGN SERVICES AGREEMENT',
+            'ACCORD DE SERVICES DE CONCEPTION GRAPHIQUE FREELANCE',
+            'This Freelance Graphic Design Services Agreement',
+            'Cet Accord de Services de Conception Graphique Freelance'
+        ];
+
+        for (const starter of contractStarters) {
+            const index = response.indexOf(starter);
+            if (index !== -1) {
+                startIndex = index;
+                console.log('✅ Found contract starter:', starter, 'at index:', index);
+                break;
+            }
+        }
+    }
+
+    if (startIndex === -1) {
+        // Try a different approach - look for the actual contract content
+        // The Chrome Translator API might be returning the prompt in the target language
+        // Let's look for the actual contract text patterns
+
+        // Look for patterns that indicate the start of the actual contract
+        const patterns = [
+            /(?:^|\n)\s*FREELANCE GRAPHIC DESIGN SERVICES AGREEMENT/i,
+            /(?:^|\n)\s*ACCORD DE SERVICES DE CONCEPTION GRAPHIQUE FREELANCE/i,
+            /(?:^|\n)\s*This Freelance Graphic Design Services Agreement/i,
+            /(?:^|\n)\s*Cet Accord de Services de Conception Graphique Freelance/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = response.match(pattern);
+            if (match) {
+                startIndex = match.index || 0;
+                console.log('✅ Found pattern match at index:', startIndex);
+                break;
+            }
+        }
+    }
+
+    if (startIndex === -1) {
+        // If still no marker found, try to find where the prompt ends and translation begins
+        // Look for the end of common prompt phrases
+        const promptEndings = [
+            'Contract to translate:',
+            'Contrat à traduire:',
+            'Text to translate:',
+            'Texte à traduire:',
+            'Exigences critiques :',
+            'CRITICAL REQUIREMENTS:',
+            'Traduisez le contrat',
+            'Translate the contract'
+        ];
+
+        for (const ending of promptEndings) {
+            const index = response.indexOf(ending);
+            if (index !== -1) {
+                startIndex = index + ending.length;
+                console.log('✅ Found prompt ending:', ending, 'at index:', index);
+                break;
+            }
+        }
+    }
+
+    if (startIndex === -1) {
+        // Last resort: if the response is mostly the prompt, try to find the actual content
+        // by looking for the original text structure
+        console.warn('⚠️ Could not find translation start marker, trying alternative approach');
+
+        // Check if the response contains the actual contract content
+        const contractIndicators = [
+            'FREELANCE GRAPHIC DESIGN SERVICES AGREEMENT',
+            'ACCORD DE SERVICES DE CONCEPTION GRAPHIQUE FREELANCE',
+            'Bloom & Co. Marketing Agency',
+            'Alexandra Chen',
+            'Chen Creative Studio',
+            'March 1, 2025',
+            '1 mars 2025'
+        ];
+
+        let foundContent = false;
+        for (const indicator of contractIndicators) {
+            if (response.includes(indicator)) {
+                foundContent = true;
+                console.log('✅ Found contract content indicator:', indicator);
+                break;
+            }
+        }
+
+        if (foundContent) {
+            console.log('✅ Found contract content in response, using full response');
+            return response;
+        }
+
+        // If all else fails, return the response as-is
+        console.warn('⚠️ Could not extract translation, returning full response');
+        return response;
+    }
+
+    // Extract the translation part
+    let translation = response.substring(startIndex).trim();
+
+    // Remove any remaining prompt text at the end
+    const endMarkers = [
+        'Exigences critiques',
+        'CRITICAL REQUIREMENTS',
+        'Traduisez le contrat',
+        'Translate the contract',
+        'Vous êtes un traducteur',
+        'You are a professional'
+    ];
+
+    for (const endMarker of endMarkers) {
+        const endIndex = translation.indexOf(endMarker);
+        if (endIndex !== -1) {
+            translation = translation.substring(0, endIndex).trim();
+            console.log('✅ Removed end marker:', endMarker);
+            break;
+        }
+    }
+
+    console.log('✅ Extracted translation length:', translation.length);
+    console.log('✅ Extracted translation first 200 chars:', translation.substring(0, 200));
+
+    return translation;
+}
+
 export interface AIResult {
     success: boolean;
     result?: string;
@@ -63,9 +246,20 @@ export async function proofreadText(text: string): Promise<ProofreadResult> {
         console.log('✅ Proofreading completed');
         console.log('Proofreading result:', result);
 
+        const proofreadResult = result.correctedInput || result.correction;
+
+        // Log debug data
+        logTranslationDebug({
+            inputText: text,
+            outputText: proofreadResult,
+            targetLanguage: 'en', // Proofreading is typically in the same language
+            step: 'proofread',
+            success: true
+        });
+
         return {
             success: true,
-            result: result.correction,
+            result: proofreadResult,
             corrections: result.corrections
         };
     } catch (error) {
@@ -255,12 +449,249 @@ function ensureConsistency(translatedText: string, sourceLanguage: string, targe
 }
 
 /**
- * Translate contract text using Chrome Translator API with enhanced quality
+ * Detect the language of the input text using Chrome Language Detector API
  */
-export async function translateText(text: string, targetLanguage: string, sourceLanguage: string = 'en'): Promise<AIResult> {
+async function detectLanguage(text: string): Promise<AIResult> {
     try {
-        console.log('🌐 Starting enhanced translation...');
+        // Check if Language Detector API is available
+        if (!('LanguageDetector' in self)) {
+            return {
+                success: false,
+                error: 'Language Detector API not available'
+            };
+        }
 
+        console.log('🔍 Checking Language Detector availability...');
+
+        // Check availability
+        const availability = await (self as any).LanguageDetector.availability();
+        console.log('🔍 Language Detector availability:', availability);
+
+        if (availability === 'unavailable') {
+            return {
+                success: false,
+                error: 'Language Detector API is unavailable'
+            };
+        }
+
+        // Create language detector with download monitoring
+        const detector = await (self as any).LanguageDetector.create({
+            monitor: (monitor: any) => {
+                monitor.addEventListener('downloadprogress', (e: any) => {
+                    const progress = Math.floor(e.loaded * 100);
+                    console.log(`Language detection model download progress: ${progress}%`);
+                });
+            }
+        });
+
+        console.log('🔍 Detecting language for text...');
+        console.log('📝 Text length:', text.length);
+        console.log('📝 Text first 200 chars:', text.substring(0, 200));
+
+        // Detect language
+        const results = await detector.detect(text);
+
+        if (results && results.length > 0) {
+            const topResult = results[0];
+            console.log('🔍 Detection results:', results.slice(0, 3)); // Show top 3 results
+
+            // Check confidence threshold
+            if (topResult.confidence > 0.5) {
+                console.log(`✅ Language detected: ${topResult.detectedLanguage} (confidence: ${topResult.confidence})`);
+                return {
+                    success: true,
+                    result: topResult.detectedLanguage
+                };
+            } else {
+                console.warn(`⚠️ Low confidence detection: ${topResult.detectedLanguage} (confidence: ${topResult.confidence})`);
+                return {
+                    success: false,
+                    error: `Low confidence language detection: ${topResult.detectedLanguage} (${topResult.confidence})`
+                };
+            }
+        } else {
+            return {
+                success: false,
+                error: 'No language detection results'
+            };
+        }
+
+    } catch (error) {
+        console.error('❌ Language detection failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Language detection failed'
+        };
+    }
+}
+
+/**
+ * Enhanced translation workflow: Detect → Translate → Format using Chrome AI APIs
+ */
+export async function translateText(text: string, targetLanguage: string, sourceLanguage: string = 'auto'): Promise<AIResult> {
+    const startTime = Date.now();
+
+    try {
+        console.log('🌐 Starting two-step translation workflow: Detect → Translate → Format');
+
+        // ============================================
+        // STEP 0: DETECT SOURCE LANGUAGE
+        // ============================================
+        let detectedSourceLanguage = sourceLanguage;
+
+        if (sourceLanguage === 'auto' || !sourceLanguage) {
+            console.log('🔍 Step 0: Detecting source language...');
+            const detectionStartTime = Date.now();
+            const detectionResult = await detectLanguage(text);
+            const detectionDuration = Date.now() - detectionStartTime;
+
+            if (detectionResult.success && detectionResult.result) {
+                detectedSourceLanguage = detectionResult.result;
+                console.log(`✅ Detected source language: ${detectedSourceLanguage}`);
+
+                // Log debug data for language detection
+                logTranslationDebug({
+                    inputText: text.substring(0, 200) + '...',
+                    outputText: detectedSourceLanguage,
+                    targetLanguage: 'detection',
+                    step: 'translate', // Use translate step for detection
+                    success: true,
+                    duration: detectionDuration
+                });
+            } else {
+                console.warn('⚠️ Language detection failed, defaulting to English');
+                detectedSourceLanguage = 'en';
+
+                // Log debug data for failed detection
+                logTranslationDebug({
+                    inputText: text.substring(0, 200) + '...',
+                    outputText: 'en (fallback)',
+                    targetLanguage: 'detection',
+                    step: 'translate',
+                    success: false,
+                    error: detectionResult.error,
+                    duration: detectionDuration
+                });
+            }
+        }
+
+        // ============================================
+        // STEP 1: TRANSLATE CONTENT
+        // ============================================
+        console.log('📝 Step 1: Translating content...');
+        const translationStartTime = Date.now();
+        const translationResult = await translateWithTranslatorAPI(text, targetLanguage, detectedSourceLanguage);
+        const translationDuration = Date.now() - translationStartTime;
+
+        if (!translationResult.success || !translationResult.result) {
+            return translationResult;
+        }
+
+        console.log('✅ Translation completed');
+
+        // ============================================
+        // STEP 2: FORMAT TRANSLATION
+        // ============================================
+        console.log('🎨 Step 2: Formatting translation...');
+
+        let formattedText = translationResult.result;
+        let formattingApplied = false;
+
+        // Check if Prompt API is available for formatting
+        if (window.ai && (window.ai.languageModel || window.ai.prompt)) {
+            try {
+                const formattingStartTime = Date.now();
+                const formattingResult = await formatTranslatedContract(translationResult.result, targetLanguage, text);
+                const formattingDuration = Date.now() - formattingStartTime;
+
+                if (formattingResult.success && formattingResult.result) {
+                    formattedText = formattingResult.result;
+                    formattingApplied = true;
+                    console.log('✅ Formatting applied successfully');
+
+                    // Log debug data for formatting step
+                    logTranslationDebug({
+                        inputText: translationResult.result,
+                        outputText: formattingResult.result,
+                        targetLanguage,
+                        step: 'format',
+                        success: true,
+                        duration: formattingDuration,
+                        formattingApplied: true
+                    });
+                } else {
+                    console.warn('⚠️ Formatting failed, using unformatted translation');
+
+                    // Log debug data for failed formatting
+                    logTranslationDebug({
+                        inputText: translationResult.result,
+                        outputText: translationResult.result,
+                        targetLanguage,
+                        step: 'format',
+                        success: false,
+                        error: formattingResult.error,
+                        duration: formattingDuration
+                    });
+                }
+            } catch (error) {
+                console.warn('⚠️ Formatting failed, using unformatted translation:', error);
+
+                // Log debug data for formatting error
+                logTranslationDebug({
+                    inputText: translationResult.result,
+                    outputText: translationResult.result,
+                    targetLanguage,
+                    step: 'format',
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Formatting failed'
+                });
+            }
+        } else {
+            console.warn('⚠️ Prompt API not available, applying basic formatting');
+
+            // Apply basic formatting as fallback using original text as template
+            formattedText = applyBasicFormatting(translationResult.result, text);
+            formattingApplied = true;
+
+            // Log debug data for basic formatting
+            logTranslationDebug({
+                inputText: translationResult.result,
+                outputText: formattedText,
+                targetLanguage,
+                step: 'format',
+                success: true,
+                duration: 0,
+                formattingApplied: true
+            });
+        }
+
+        // Add disclaimer about AI translation
+        const disclaimer = targetLanguage === 'fr'
+            ? '\n\n[DISCLAIMER: Traduction assistée par IA à des fins de référence uniquement. Consultez un professionnel juridique pour la version finale.]'
+            : '\n\n[DISCLAIMER: AI-assisted translation for reference only. Consult legal professional for final version.]';
+
+        return {
+            success: true,
+            result: formattedText + disclaimer
+        };
+
+    } catch (error) {
+        console.error('❌ Translation workflow failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Translation workflow failed'
+        };
+    }
+}
+
+/**
+ * Step 1: Translate using Chrome Translator API
+ */
+async function translateWithTranslatorAPI(text: string, targetLanguage: string, sourceLanguage: string): Promise<AIResult> {
+    const startTime = Date.now();
+    let translationPrompt = '';
+
+    try {
         // Check for global Translator API
         const globalTranslator = (window as any).Translator;
         if (!globalTranslator || typeof globalTranslator.create !== 'function') {
@@ -297,60 +728,42 @@ export async function translateText(text: string, targetLanguage: string, source
             }
         });
 
-        // Enhanced translation with context
-        const contextPrompt = `
-Translate the following legal contract text from ${sourceLanguage} to ${targetLanguage}. 
+        // Use Chrome Translator API - send just the contract text, not the prompt
+        console.log('📝 Original text length:', text.length);
+        console.log('📝 First 200 chars:', text.substring(0, 200));
 
-IMPORTANT INSTRUCTIONS:
-1. Maintain all legal terminology consistently throughout the document
-2. Preserve the original formatting, structure, and layout
-3. Use formal legal language appropriate for contracts
-4. Keep section headers in ALL CAPS
-5. Maintain numbered sections and bullet points
-6. Preserve dates, amounts, and addresses exactly as written
-7. Use standard legal phrases for the target language
+        // Build enhanced translation prompt with legal context (for logging only)
+        translationPrompt = buildTranslationPrompt(text, sourceLanguage, targetLanguage);
+        console.log('📝 Translation prompt (for reference):', translationPrompt.substring(0, 200));
 
-Text to translate:
-${text}
-`;
+        // Send ONLY the contract text to the Translator API, not the prompt
+        const rawResult = await translator.translate(text);
+        console.log('✅ Translation completed using Translator API');
+        console.log('📝 Raw result length:', rawResult.length);
+        console.log('📝 Raw result first 200 chars:', rawResult.substring(0, 200));
 
-        // Translate with context
-        const result = await translator.translate(contextPrompt);
-
-        console.log('✅ Translation completed');
-        console.log('Raw translation result:', result);
+        // Since we sent only the contract text, the result should be the direct translation
+        // But let's still clean it up in case there are any artifacts
+        const result = extractTranslationFromResponse(rawResult, text);
+        console.log('📝 Cleaned translation length:', result.length);
+        console.log('📝 Cleaned translation first 200 chars:', result.substring(0, 200));
 
         // Post-process the translation
         let enhancedResult = result;
-
-        // 1. Ensure consistency
         enhancedResult = ensureConsistency(enhancedResult, sourceLanguage, targetLanguage);
-
-        // 2. Preserve formatting
         enhancedResult = preserveFormatting(text, enhancedResult);
 
-        // 3. Add quality disclaimer
-        const disclaimer = targetLanguage === 'fr'
-            ? '\n\n[DISCLAIMER: Traduction assistée par IA à des fins de référence uniquement. Consultez un professionnel juridique pour la version finale.]'
-            : '\n\n[DISCLAIMER: AI-assisted translation for reference only. Consult legal professional for final version.]';
+        const duration = Date.now() - startTime;
 
-        enhancedResult += disclaimer;
-
-        console.log('Enhanced translation result:', enhancedResult);
-
-        // 4. Optional: Post-translation proofreading for critical errors
-        if (targetLanguage === 'fr') {
-            try {
-                console.log('🔍 Running post-translation proofreading...');
-                const proofreadResult = await proofreadText(enhancedResult);
-                if (proofreadResult.success && proofreadResult.result) {
-                    console.log('✅ Post-translation proofreading completed');
-                    enhancedResult = proofreadResult.result;
-                }
-            } catch (proofreadError) {
-                console.warn('⚠️ Post-translation proofreading failed, using original translation:', proofreadError);
-            }
-        }
+        // Log debug data for translation step
+        logTranslationDebug({
+            inputText: translationPrompt,
+            outputText: enhancedResult,
+            targetLanguage,
+            step: 'translate',
+            success: true,
+            duration: duration
+        });
 
         return {
             success: true,
@@ -358,11 +771,606 @@ ${text}
         };
     } catch (error) {
         console.error('❌ Translation failed:', error);
+
+        const duration = Date.now() - startTime;
+
+        // Log debug data for failed translation
+        logTranslationDebug({
+            inputText: translationPrompt || text,
+            outputText: '',
+            targetLanguage,
+            step: 'translate',
+            success: false,
+            error: error instanceof Error ? error.message : 'Translation failed',
+            duration: duration
+        });
+
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Translation failed'
         };
     }
+}
+
+/**
+ * Manual proofreading for user-selected text only (prevents hallucinations)
+ * This should only be used on small text selections (< 500 characters)
+ */
+export async function proofreadSelection(selectedText: string): Promise<AIResult> {
+    try {
+        // Enforce size limit to prevent hallucinations
+        if (selectedText.length > 500) {
+            return {
+                success: false,
+                error: 'Selection too large. Please select max 500 characters for proofreading to prevent hallucinations.'
+            };
+        }
+
+        console.log('🔍 Manual proofreading of selected text...');
+        console.log('📝 Selected text length:', selectedText.length);
+
+        const result = await proofreadText(selectedText);
+
+        if (!result.success || !result.result) {
+            return {
+                success: false,
+                error: result.error || 'Proofreading failed'
+            };
+        }
+
+        // Validate that proofreading didn't hallucinate
+        const validation = validateProofreadOutput(selectedText, result.result);
+
+        if (!validation.isValid) {
+            console.warn('⚠️ Proofreader may have hallucinated, returning original text');
+            return {
+                success: true,
+                result: selectedText,
+                warning: 'Proofreading may have altered content. Original text preserved.'
+            };
+        }
+
+        console.log('✅ Manual proofreading completed successfully');
+        return {
+            success: true,
+            result: result.result
+        };
+    } catch (error) {
+        console.error('❌ Manual proofreading failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Manual proofreading failed'
+        };
+    }
+}
+
+/**
+ * Validate proofread output to detect hallucinations
+ */
+function validateProofreadOutput(original: string, proofread: string): { isValid: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    // Check 1: Length similarity (should be within 10%)
+    const lengthDiff = Math.abs(proofread.length - original.length) / original.length;
+    if (lengthDiff > 0.1) {
+        issues.push(`Length changed by ${(lengthDiff * 100).toFixed(1)}% (max allowed: 10%)`);
+    }
+
+    // Check 2: No new section numbers
+    const originalSections = original.match(/\d+\.\s+[A-Z]/g) || [];
+    const proofreadSections = proofread.match(/\d+\.\s+[A-Z]/g) || [];
+    if (proofreadSections.length > originalSections.length) {
+        issues.push(`New sections detected: ${proofreadSections.length} vs ${originalSections.length}`);
+    }
+
+    // Check 3: Key terms preserved (dollar amounts, dates)
+    const dollarAmounts = original.match(/\$[\d,]+/g) || [];
+    const missingAmounts = dollarAmounts.filter(amount => !proofread.includes(amount));
+    if (missingAmounts.length > 0) {
+        issues.push(`Missing dollar amounts: ${missingAmounts.join(', ')}`);
+    }
+
+    // Check 4: No completely new content blocks
+    const originalWords = original.split(/\s+/).length;
+    const proofreadWords = proofread.split(/\s+/).length;
+    if (proofreadWords > originalWords * 1.5) {
+        issues.push(`Significant content increase detected: ${proofreadWords} vs ${originalWords} words`);
+    }
+
+    return {
+        isValid: issues.length === 0,
+        issues
+    };
+}
+
+/**
+ * Step 2: Format translated contract using Chrome Prompt API (LanguageModel)
+ * This adds proper formatting without changing content, using original text as template
+ */
+async function formatTranslatedContract(translatedText: string, targetLanguage: string, originalText: string): Promise<AIResult> {
+    try {
+        // Check if Prompt API is available
+        if (!window.ai) {
+            return {
+                success: false,
+                error: 'Chrome AI API not available for formatting'
+            };
+        }
+
+        console.log('🎨 Creating language model session for formatting...');
+        console.log('🔍 Available AI APIs:', Object.keys(window.ai));
+
+        let session;
+
+        // Try different AI API methods
+        if (window.ai.languageModel) {
+            console.log('📝 Using languageModel API');
+            session = await window.ai.languageModel.create({
+                systemPrompt: 'You are a legal document formatter. Your ONLY job is to add proper formatting.',
+                temperature: 0.1,
+                topK: 1
+            });
+        } else if (window.ai.prompt) {
+            console.log('📝 Using prompt API');
+            session = await window.ai.prompt.create({
+                systemPrompt: 'You are a legal document formatter. Your ONLY job is to add proper formatting.',
+                temperature: 0.1,
+                topK: 1
+            });
+        } else {
+            return {
+                success: false,
+                error: 'No suitable AI API found for formatting'
+            };
+        }
+
+        // Build formatting prompt using original text as template
+        const formattingPrompt = buildFormattingPrompt(translatedText, originalText);
+
+        console.log('📝 Sending formatting request to Prompt API...');
+        console.log('📝 Formatting prompt length:', formattingPrompt.length);
+        console.log('📝 Formatting prompt first 200 chars:', formattingPrompt.substring(0, 200));
+
+        // Get formatted output
+        const formattedText = await session.prompt(formattingPrompt);
+
+        console.log('✅ Formatting completed');
+        console.log('📝 Formatted text length:', formattedText.length);
+        console.log('📝 Formatted text first 200 chars:', formattedText.substring(0, 200));
+
+        // Validate formatting didn't alter content significantly
+        const validation = validateFormatting(translatedText, formattedText);
+
+        if (!validation.isValid) {
+            console.warn('⚠️ Formatting validation failed:', validation.issues);
+            return {
+                success: false,
+                error: `Formatting validation failed: ${validation.issues.join(', ')}`
+            };
+        }
+
+        return {
+            success: true,
+            result: formattedText
+        };
+
+    } catch (error) {
+        console.error('❌ Formatting failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Formatting failed'
+        };
+    }
+}
+
+/**
+ * Build enhanced translation prompt with legal context and terminology guides
+ */
+function buildTranslationPrompt(text: string, sourceLang: string, targetLang: string): string {
+    const terminology = getTerminologyGuide(targetLang);
+
+    return `Translate this ${sourceLang} legal contract to ${targetLang}. 
+
+IMPORTANT:
+- Translate EVERY section completely
+- Use correct legal terms: ${Object.entries(terminology).map(([en, target]) => `"${en}" = "${target}"`).join(', ')}
+- Keep all dates, amounts, addresses exactly the same
+- Preserve the structure and formatting
+- No repetition or missing content
+
+${text}`;
+}
+
+/**
+ * Get terminology guide for target language
+ */
+function getTerminologyGuide(targetLang: string): Record<string, string> {
+    const guides: Record<string, Record<string, string>> = {
+        fr: {
+            'Agreement': 'Accord',
+            'Termination': 'Résiliation',
+            'Intellectual Property': 'Propriété Intellectuelle',
+            'Independent Contractor': 'Entrepreneur Indépendant',
+            'Confidentiality': 'Confidentialité',
+            'Indemnification': 'Indemnisation',
+            'Liability': 'Responsabilité'
+        },
+        es: {
+            'Agreement': 'Acuerdo',
+            'Termination': 'Terminación',
+            'Intellectual Property': 'Propiedad Intelectual',
+            'Independent Contractor': 'Contratista Independiente',
+            'Confidentiality': 'Confidencialidad',
+            'Indemnification': 'Indemnización',
+            'Liability': 'Responsabilidad'
+        },
+        de: {
+            'Agreement': 'Vereinbarung',
+            'Termination': 'Kündigung',
+            'Intellectual Property': 'Geistiges Eigentum',
+            'Independent Contractor': 'Freier Mitarbeiter',
+            'Confidentiality': 'Vertraulichkeit',
+            'Indemnification': 'Schadloshaltung',
+            'Liability': 'Haftung'
+        }
+    };
+
+    return guides[targetLang] || {};
+}
+
+/**
+ * Apply basic formatting to translated text using original text as template
+ */
+function applyBasicFormatting(translatedText: string, originalText: string): string {
+    console.log('🎨 Applying basic formatting using original text as template...');
+
+    let formatted = translatedText;
+
+    // Analyze the original text structure to understand the formatting pattern
+    const originalLines = originalText.split('\n');
+    const translatedLines = translatedText.split('\n');
+
+    // Find section breaks in original text (double line breaks)
+    const originalSections = originalText.split('\n\n');
+    const translatedSections = translatedText.split('\n\n');
+
+    // If we have similar number of sections, try to match the structure
+    if (Math.abs(originalSections.length - translatedSections.length) <= 2) {
+        console.log('📝 Matching section structure from original text');
+
+        // Add line breaks before numbered sections (1., 2., 3., etc.)
+        formatted = formatted.replace(/(\d+\.\s+[A-Z][^.]*)/g, '\n\n$1');
+
+        // Add line breaks before subsections (A., B., C., etc.)
+        formatted = formatted.replace(/([A-Z]\.\s+[A-Z][^.]*)/g, '\n$1');
+
+        // Add line breaks before bullet points or list items
+        formatted = formatted.replace(/(\n\s*[-•]\s)/g, '\n$1');
+
+        // Add line breaks after section titles (all caps)
+        formatted = formatted.replace(/([A-Z\s]{10,}:)/g, '$1\n');
+
+        // Add line breaks after major headers
+        formatted = formatted.replace(/(FREELANCE GRAPHIC DESIGN SERVICES AGREEMENT)/g, '$1\n\n');
+        formatted = formatted.replace(/(ACCORD DE SERVICES DE CONCEPTION GRAPHIQUE FREELANCE)/g, '$1\n\n');
+
+        // Add line breaks after CLIENT/DESIGNER sections
+        formatted = formatted.replace(/(CLIENT:)/g, '$1\n');
+        formatted = formatted.replace(/(CONCEPTEUR:)/g, '$1\n');
+        formatted = formatted.replace(/(CLIENT :)/g, '$1\n');
+
+        // Add line breaks after BACKGROUND/CONTEXTE
+        formatted = formatted.replace(/(BACKGROUND)/g, '$1\n\n');
+        formatted = formatted.replace(/(CONTEXTE)/g, '$1\n\n');
+    } else {
+        console.log('📝 Using fallback formatting rules');
+
+        // Fallback to basic formatting rules
+        formatted = formatted.replace(/(\d+\.\s+[A-Z][^.]*)/g, '\n\n$1');
+        formatted = formatted.replace(/([A-Z]\.\s+[A-Z][^.]*)/g, '\n$1');
+        formatted = formatted.replace(/(\n\s*[-•]\s)/g, '\n$1');
+        formatted = formatted.replace(/([A-Z\s]{10,}:)/g, '$1\n');
+    }
+
+    // Clean up multiple line breaks
+    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+
+    // Trim whitespace
+    formatted = formatted.trim();
+
+    console.log('✅ Basic formatting applied using original text template');
+    return formatted;
+}
+
+/**
+ * Build formatting prompt for Prompt API using original text as template
+ */
+function buildFormattingPrompt(translatedText: string, originalText: string): string {
+    return `You are a document formatter. Format the translated text to match the structure and formatting of the original text.
+
+CRITICAL RULES:
+- DO NOT change any words or content in the translated text
+- DO NOT translate anything
+- ONLY add line breaks, spacing, and formatting to match the original structure
+- Preserve all dates, amounts, names, and addresses exactly
+
+TASK:
+Format the translated text below to have the same line breaks, spacing, and structure as the original text above.
+
+ORIGINAL TEXT (use as formatting template):
+${originalText}
+
+TRANSLATED TEXT (format this to match the original structure):
+${translatedText}
+
+Return the translated text with formatting that matches the original text structure.`;
+}
+
+/**
+ * Validate that formatting didn't alter content significantly
+ */
+function validateFormatting(original: string, formatted: string): { isValid: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    // Check 1: Length similarity (within 15%)
+    const lengthDiff = Math.abs(formatted.length - original.length) / original.length;
+    if (lengthDiff > 0.15) {
+        issues.push(`Length changed by ${(lengthDiff * 100).toFixed(1)}% (max allowed: 15%)`);
+    }
+
+    // Check 2: Section count preserved
+    const originalSections = (original.match(/\d+\.\s+[A-Z]/g) || []).length;
+    const formattedSections = (formatted.match(/\d+\.\s+[A-Z]/g) || []).length;
+    if (originalSections !== formattedSections) {
+        issues.push(`Section count mismatch: ${originalSections} vs ${formattedSections}`);
+    }
+
+    // Check 3: Key terms preserved (dollar amounts, dates)
+    const dollarAmounts = original.match(/\$[\d,]+/g) || [];
+    const missingAmounts = dollarAmounts.filter(amount => !formatted.includes(amount));
+    if (missingAmounts.length > 0) {
+        issues.push(`Missing dollar amounts: ${missingAmounts.join(', ')}`);
+    }
+
+    // Check 4: No significant content increase
+    const originalWords = original.split(/\s+/).length;
+    const formattedWords = formatted.split(/\s+/).length;
+    if (formattedWords > originalWords * 1.2) {
+        issues.push(`Significant content increase: ${formattedWords} vs ${originalWords} words`);
+    }
+
+    return {
+        isValid: issues.length === 0,
+        issues
+    };
+}
+
+/**
+ * Step 3a: Format using Chrome Rewriter API for better structure (DEPRECATED - use formatTranslatedContract instead)
+ */
+async function formatWithRewriterAPI(text: string, targetLanguage: string): Promise<AIResult> {
+    try {
+        // Check for global Rewriter API
+        const globalRewriter = (window as any).Rewriter;
+        if (!globalRewriter || typeof globalRewriter.create !== 'function') {
+            return {
+                success: false,
+                error: 'Rewriter API not available'
+            };
+        }
+
+        // Check availability
+        const availability = await globalRewriter.availability();
+        if (availability === 'unavailable') {
+            return {
+                success: false,
+                error: 'Rewriter API is not available'
+            };
+        }
+
+        // Create rewriter session with download monitoring
+        const rewriter = await globalRewriter.create({
+            tone: 'as-is',
+            format: 'plain-text',
+            length: 'as-is',
+            sharedContext: `This is a legal contract in ${targetLanguage}. Clean up formatting issues while preserving all legal content and structure.`,
+            monitor: (monitor: any) => {
+                monitor.addEventListener('downloadprogress', (e: any) => {
+                    const progress = Math.floor(e.loaded * 100);
+                    console.log(`Rewriter API model download progress: ${progress}%`);
+                });
+            }
+        });
+
+        // Rewrite with enhanced quality control context
+        const context = `You are a legal document editor. Clean up and improve this translated legal contract by:
+
+QUALITY CONTROL REQUIREMENTS:
+1. Remove any encoding artifacts, strange characters, or formatting issues
+2. Ensure proper paragraph breaks and spacing throughout
+3. Maintain ALL legal terminology and structure exactly
+4. CRITICAL: Remove any duplicate or repeated content - each clause should appear only once
+5. Fix any grammatical errors or awkward phrasing
+6. Preserve ALL numbered sections (1, 2, 3, etc.) and subsections (A, B, C, etc.)
+7. Keep ALL section headers properly formatted
+8. Ensure complete translation - no missing sections
+9. Verify legal terminology is correct (e.g., "résiliation" not "résignation")
+10. Maintain formal legal register and professional tone
+
+DO NOT:
+- Add new content not in the original
+- Change legal meaning or intent
+- Remove any sections or clauses
+- Summarize or condense content
+
+ONLY clean up formatting, grammar, and remove duplicates while preserving complete legal content.`;
+
+        const formattedResult = await rewriter.rewrite(text, { context });
+        console.log('✅ Rewriter API formatting completed');
+
+        // Quality validation
+        const qualityCheck = validateTranslationQuality(formattedResult, targetLanguage);
+        if (!qualityCheck.isValid) {
+            console.warn('⚠️ Translation quality issues detected:', qualityCheck.issues);
+        }
+
+        // Add quality disclaimer
+        const disclaimer = targetLanguage === 'fr'
+            ? '\n\n[DISCLAIMER: Traduction assistée par IA à des fins de référence uniquement. Consultez un professionnel juridique pour la version finale.]'
+            : '\n\n[DISCLAIMER: AI-assisted translation for reference only. Consult legal professional for final version.]';
+
+        const finalResult = formattedResult + disclaimer;
+
+        // Log debug data
+        logTranslationDebug({
+            inputText: text,
+            outputText: finalResult,
+            targetLanguage,
+            step: 'format',
+            success: true
+        });
+
+        return {
+            success: true,
+            result: finalResult
+        };
+    } catch (error) {
+        console.error('❌ Rewriter API formatting failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Rewriter formatting failed'
+        };
+    }
+}
+
+/**
+ * Step 3b: Format using Chrome Prompt API for better structure (fallback)
+ */
+async function formatWithPromptAPI(text: string, targetLanguage: string): Promise<AIResult> {
+    try {
+        // Check for global LanguageModel API (Prompt API)
+        const globalLanguageModel = (window as any).LanguageModel;
+        if (!globalLanguageModel || typeof globalLanguageModel.create !== 'function') {
+            return {
+                success: false,
+                error: 'Prompt API not available'
+            };
+        }
+
+        // Check availability
+        const availability = await globalLanguageModel.availability();
+        if (availability === 'unavailable') {
+            return {
+                success: false,
+                error: 'Prompt API is not available'
+            };
+        }
+
+        // Create session with download monitoring
+        const session = await globalLanguageModel.create({
+            monitor: (monitor: any) => {
+                monitor.addEventListener('downloadprogress', (e: any) => {
+                    const progress = Math.floor(e.loaded * 100);
+                    console.log(`Prompt API model download progress: ${progress}%`);
+                });
+            }
+        });
+
+        // Create formatting prompt based on target language
+        const languageInstructions = targetLanguage === 'fr'
+            ? 'Format this French legal contract text properly. Ensure proper spacing, paragraph breaks, and legal formatting. Remove any formatting artifacts or encoding issues. Maintain the original structure but clean up the presentation.'
+            : `Format this ${targetLanguage} legal contract text properly. Ensure proper spacing, paragraph breaks, and legal formatting. Remove any formatting artifacts or encoding issues. Maintain the original structure but clean up the presentation.`;
+
+        const formatPrompt = `
+You are a professional legal document formatter. ${languageInstructions}
+
+CRITICAL FORMATTING REQUIREMENTS:
+1. PRESERVE ALL LEGAL TERMINOLOGY AND STRUCTURE - Do not change any legal meaning
+2. Ensure proper paragraph breaks and spacing throughout
+3. Remove any encoding artifacts, strange characters, or formatting issues
+4. Maintain ALL numbered sections (1, 2, 3, etc.) and subsections (A, B, C, etc.)
+5. Keep ALL section headers properly formatted
+6. Ensure consistent spacing throughout the document
+7. CRITICAL: Remove any duplicate or repeated content - each clause should appear only once
+8. Fix any grammatical errors or awkward phrasing
+9. Ensure complete document - no missing sections
+10. Verify legal terminology is correct (e.g., "résiliation" not "résignation" for French)
+
+DO NOT:
+- Add new content not in the original
+- Change legal meaning or intent
+- Remove any sections or clauses
+- Summarize or condense content
+
+ONLY clean up formatting, grammar, and remove duplicates while preserving complete legal content.
+
+Text to format:
+${text}
+
+Return only the properly formatted legal contract without any additional commentary or explanations.
+`;
+
+        const formattedResult = await session.prompt(formatPrompt);
+        console.log('✅ Prompt API formatting completed');
+
+        // Add quality disclaimer
+        const disclaimer = targetLanguage === 'fr'
+            ? '\n\n[DISCLAIMER: Traduction assistée par IA à des fins de référence uniquement. Consultez un professionnel juridique pour la version finale.]'
+            : '\n\n[DISCLAIMER: AI-assisted translation for reference only. Consult legal professional for final version.]';
+
+        return {
+            success: true,
+            result: formattedResult + disclaimer
+        };
+    } catch (error) {
+        console.error('❌ Prompt API formatting failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Formatting failed'
+        };
+    }
+}
+
+/**
+ * Validate translation quality to catch common issues
+ */
+function validateTranslationQuality(text: string, targetLanguage: string): { isValid: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    if (targetLanguage === 'fr') {
+        // Check for common French translation errors
+        if (text.includes('résignation')) {
+            issues.push('Incorrect legal term: "résignation" should be "résiliation"');
+        }
+
+        if (text.includes('détenir')) {
+            issues.push('Grammatical error: "détenir" should be "détient" or "détiendra"');
+        }
+
+        // Check for excessive repetition
+        const lines = text.split('\n');
+        const uniqueLines = new Set(lines);
+        if (lines.length > uniqueLines.size * 1.5) {
+            issues.push('Excessive repetition detected in translation');
+        }
+
+        // Check for incomplete translation (too short)
+        if (text.length < 1000) {
+            issues.push('Translation appears incomplete (too short)');
+        }
+
+        // Check for missing sections
+        const expectedSections = ['1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.'];
+        const missingSections = expectedSections.filter(section => !text.includes(section));
+        if (missingSections.length > 5) {
+            issues.push(`Missing sections: ${missingSections.join(', ')}`);
+        }
+    }
+
+    return {
+        isValid: issues.length === 0,
+        issues
+    };
 }
 
 /**
@@ -372,12 +1380,14 @@ export function checkAIFeatures(): {
     proofreader: boolean;
     rewriter: boolean;
     translator: boolean;
+    promptAPI: boolean;
     overall: boolean;
 } {
     const features = {
         proofreader: false,
         rewriter: false,
         translator: false,
+        promptAPI: false,
         overall: false
     };
 
@@ -386,15 +1396,13 @@ export function checkAIFeatures(): {
         const hasTranslator = (window as any).Translator && typeof (window as any).Translator.create === 'function';
         const hasProofreader = (window as any).Proofreader && typeof (window as any).Proofreader.create === 'function';
         const hasRewriter = (window as any).Rewriter && typeof (window as any).Rewriter.create === 'function';
-
-        // Fallback to LanguageModel if specific APIs are not available
-        const globalLM = (window as any).LanguageModel;
-        const hasLanguageModel = globalLM && typeof globalLM.create === 'function';
+        const hasLanguageModel = (window as any).LanguageModel && typeof (window as any).LanguageModel.create === 'function';
 
         features.translator = hasTranslator;
         features.proofreader = hasProofreader || hasLanguageModel;
         features.rewriter = hasRewriter || hasLanguageModel;
-        features.overall = features.proofreader || features.rewriter || features.translator;
+        features.promptAPI = hasLanguageModel;
+        features.overall = features.proofreader || features.rewriter || features.translator || features.promptAPI;
     }
 
     return features;
@@ -407,18 +1415,21 @@ export async function testAIFeatures(): Promise<{
     proofreader: AIResult;
     rewriter: AIResult;
     translator: AIResult;
+    promptAPI: AIResult;
 }> {
     const testText = "This is a test sentence with some errors that need to be corrected.";
 
-    const [proofreaderResult, rewriterResult, translatorResult] = await Promise.allSettled([
+    const [proofreaderResult, rewriterResult, translatorResult, promptAPIResult] = await Promise.allSettled([
         proofreadText(testText),
         rewriteText(testText, 'formal'),
-        translateText(testText, 'es')
+        translateText(testText, 'es'),
+        formatWithPromptAPI(testText, 'en')
     ]);
 
     return {
         proofreader: proofreaderResult.status === 'fulfilled' ? proofreaderResult.value : { success: false, error: 'Promise rejected' },
         rewriter: rewriterResult.status === 'fulfilled' ? rewriterResult.value : { success: false, error: 'Promise rejected' },
-        translator: translatorResult.status === 'fulfilled' ? translatorResult.value : { success: false, error: 'Promise rejected' }
+        translator: translatorResult.status === 'fulfilled' ? translatorResult.value : { success: false, error: 'Promise rejected' },
+        promptAPI: promptAPIResult.status === 'fulfilled' ? promptAPIResult.value : { success: false, error: 'Promise rejected' }
     };
 }

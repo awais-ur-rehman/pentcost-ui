@@ -1,111 +1,194 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @layer base {
   :root {
-    /* Primary Colors (Blue) */
-    --color-primary-50: #eff6ff;
-    --color-primary-100: #dbeafe;
-    --color-primary-200: #bfdbfe;
-    --color-primary-300: #93c5fd;
-    --color-primary-400: #60a5fa;
-    --color-primary-500: #3b82f6;
-    --color-primary-600: #2563eb;
-    --color-primary-700: #1d4ed8;
-    --color-primary-800: #1e40af;
-    --color-primary-900: #1e3a8a;
+    /* Google Docs Inspired Color Palette */
+    --color-primary: #1a73e8;
+    --color-primary-hover: #1557b0;
+    --color-secondary: #5f6368;
+    --color-success: #188038;
+    --color-warning: #e37400;
+    --color-error: #d93025;
+    --color-background: #ffffff;
+    --color-surface: #f8f9fa;
+    --color-border: #dadce0;
+    --color-text-primary: #202124;
+    --color-text-secondary: #5f6368;
+    --color-text-tertiary: #80868b;
 
-    /* Secondary Colors (Gray) */
-    --color-secondary-50: #f9fafb;
-    --color-secondary-100: #f3f4f6;
-    --color-secondary-200: #e5e7eb;
-    --color-secondary-300: #d1d5db;
-    --color-secondary-400: #9ca3af;
-    --color-secondary-500: #6b7280;
-    --color-secondary-600: #4b5563;
-    --color-secondary-700: #374151;
-    --color-secondary-800: #1f2937;
-    --color-secondary-900: #111827;
+    /* Legacy color mappings for existing components */
+    --color-primary-50: #e8f0fe;
+    --color-primary-100: #d2e3fc;
+    --color-primary-200: #aecbfa;
+    --color-primary-300: #8ab4f8;
+    --color-primary-400: #669df6;
+    --color-primary-500: #4285f4;
+    --color-primary-600: #1a73e8;
+    --color-primary-700: #1557b0;
+    --color-primary-800: #0d47a1;
+    --color-primary-900: #0a3d91;
 
-    /* Accent Colors (Green) */
-    --color-accent-50: #f0fdf4;
-    --color-accent-100: #dcfce7;
-    --color-accent-200: #bbf7d0;
-    --color-accent-300: #86efac;
-    --color-accent-400: #4ade80;
-    --color-accent-500: #22c55e;
-    --color-accent-600: #16a34a;
-    --color-accent-700: #15803d;
-    --color-accent-800: #166534;
-    --color-accent-900: #14532d;
+    --color-secondary-50: #f8f9fa;
+    --color-secondary-100: #f1f3f4;
+    --color-secondary-200: #e8eaed;
+    --color-secondary-300: #dadce0;
+    --color-secondary-400: #bdc1c6;
+    --color-secondary-500: #9aa0a6;
+    --color-secondary-600: #80868b;
+    --color-secondary-700: #5f6368;
+    --color-secondary-800: #3c4043;
+    --color-secondary-900: #202124;
+
+    --color-accent-50: #e6f4ea;
+    --color-accent-100: #ceead6;
+    --color-accent-200: #a8d5ba;
+    --color-accent-300: #81c995;
+    --color-accent-400: #5bb974;
+    --color-accent-500: #34a853;
+    --color-accent-600: #188038;
+    --color-accent-700: #137333;
+    --color-accent-800: #0d652d;
+    --color-accent-900: #0a4a21;
   }
 
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Google Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
   body {
     @apply bg-white text-gray-900 antialiased;
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
   }
 }
 
 @layer components {
+
+  /* Google Docs inspired button styles */
   .btn-primary {
-    @apply text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
-    background-color: var(--color-primary-600);
+    @apply text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    background-color: var(--color-primary);
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
   }
 
   .btn-primary:hover {
-    background-color: var(--color-primary-700);
+    background-color: var(--color-primary-hover);
+    box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
   }
 
   .btn-primary:focus {
-    --tw-ring-color: var(--color-primary-500);
+    --tw-ring-color: var(--color-primary);
   }
 
   .btn-secondary {
-    @apply font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
-    background-color: var(--color-secondary-100);
-    color: var(--color-secondary-900);
+    @apply font-medium py-3 px-6 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
   }
 
   .btn-secondary:hover {
-    background-color: var(--color-secondary-200);
+    background-color: var(--color-secondary-100);
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
   }
 
   .btn-secondary:focus {
-    --tw-ring-color: var(--color-secondary-500);
+    --tw-ring-color: var(--color-secondary);
   }
 
   .btn-outline {
-    @apply font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
-    border: 1px solid var(--color-secondary-300);
-    color: var(--color-secondary-700);
+    @apply font-medium py-3 px-6 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    background-color: transparent;
   }
 
   .btn-outline:hover {
-    border-color: var(--color-secondary-400);
-    color: var(--color-secondary-900);
+    background-color: var(--color-surface);
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
   }
 
   .btn-outline:focus {
-    --tw-ring-color: var(--color-secondary-500);
+    --tw-ring-color: var(--color-primary);
   }
 
+  /* Google Docs inspired input styles */
   .input-field {
-    @apply w-full px-3 py-2 rounded-lg focus:outline-none transition-colors duration-200;
-    border: 1px solid var(--color-secondary-300);
+    @apply w-full px-4 py-3 rounded-lg focus:outline-none transition-all duration-200;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
   }
 
   .input-field:focus {
-    border-color: transparent;
-    --tw-ring-color: var(--color-primary-500);
-    --tw-ring-width: 2px;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
   }
 
+  .input-field::placeholder {
+    color: var(--color-text-tertiary);
+  }
+
+  /* Google Docs inspired card styles */
   .card {
-    @apply rounded-lg shadow-sm p-6;
-    background-color: white;
-    border: 1px solid var(--color-secondary-200);
+    @apply rounded-lg p-6 transition-all duration-200;
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  }
+
+  .card:hover {
+    box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  }
+
+  /* Typography styles matching Google Docs */
+  .heading-1 {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 40px;
+    color: var(--color-text-primary);
+  }
+
+  .heading-2 {
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 32px;
+    color: var(--color-text-primary);
+  }
+
+  .heading-3 {
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 28px;
+    color: var(--color-text-primary);
+  }
+
+  .heading-4 {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 24px;
+    color: var(--color-text-primary);
+  }
+
+  .body-large {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    color: var(--color-text-primary);
+  }
+
+  .body-regular {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: var(--color-text-primary);
+  }
+
+  .body-small {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    color: var(--color-text-secondary);
   }
 }

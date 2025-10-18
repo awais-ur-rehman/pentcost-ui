@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { ContractProvider } from './contexts/ContractContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { TranslationDebugProvider } from './contexts/TranslationDebugContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 // Create a client
@@ -20,8 +21,10 @@ const queryClient = new QueryClient({
 });
 
 // Lazy load pages for better performance
+const Landing = React.lazy(() => import('./pages/public/Landing'));
 const Login = React.lazy(() => import('./pages/public/Login'));
 const Signup = React.lazy(() => import('./pages/public/Signup'));
+const Onboarding = React.lazy(() => import('./pages/private/Onboarding'));
 const Dashboard = React.lazy(() => import('./pages/private/Dashboard'));
 const CreateContract = React.lazy(() => import('./pages/private/CreateContract'));
 const EditContract = React.lazy(() => import('./pages/private/EditContract'));
@@ -35,7 +38,8 @@ function App() {
       <Router>
         <AuthProvider>
           <LanguageProvider>
-            <ContractProvider>
+            <TranslationDebugProvider>
+              <ContractProvider>
             <div className="min-h-screen bg-gray-50">
               <React.Suspense fallback={
                 <div className="min-h-screen flex items-center justify-center">
@@ -44,10 +48,19 @@ function App() {
               }>
                 <Routes>
                   {/* Public routes */}
+                  <Route path="/" element={<Landing />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/signup" element={<Signup />} />
                   
                   {/* Protected routes */}
+                  <Route
+                    path="/onboarding"
+                    element={
+                      <ProtectedRoute>
+                        <Onboarding />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/dashboard"
                     element={
@@ -57,7 +70,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/contracts/new"
+                    path="/contracts/create"
                     element={
                       <ProtectedRoute>
                         <CreateContract />
@@ -97,11 +110,8 @@ function App() {
                     }
                   />
                   
-                  {/* Default redirect */}
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  
                   {/* 404 fallback */}
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </React.Suspense>
             </div>
@@ -131,9 +141,10 @@ function App() {
                 },
               }}
             />
-          </ContractProvider>
-        </LanguageProvider>
-      </AuthProvider>
+              </ContractProvider>
+            </TranslationDebugProvider>
+          </LanguageProvider>
+        </AuthProvider>
     </Router>
     <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

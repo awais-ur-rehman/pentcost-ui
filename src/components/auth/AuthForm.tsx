@@ -16,9 +16,11 @@ const loginSchema = z.object({
 });
 
 const signupSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().min(2, 'Please enter your full name'),
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/^(?=.*[A-Z])(?=.*\d)/, 'Password must contain at least 1 uppercase letter and 1 number'),
   confirmPassword: z.string(),
   preferredLanguage: z.string().min(1, 'Please select a language'),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -31,10 +33,9 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
-  onToggleMode: () => void;
 }
 
-export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
+export function AuthForm({ mode }: AuthFormProps) {
   const navigate = useNavigate();
   const { login, signup, loading } = useAuth();
   const { availableLanguages } = useLanguage();
@@ -68,10 +69,6 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
     }
   };
 
-  const handleToggleMode = () => {
-    reset();
-    onToggleMode();
-  };
 
   if (loading) {
     return (
@@ -88,17 +85,17 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
         <Input
           label="Full Name"
           {...register('name')}
-            error={(errors as any).name?.message}
+          error={(errors as any).name?.message}
           placeholder="Enter your full name"
         />
       )}
 
       <Input
-        label="Email Address"
+        label="Email"
         type="email"
         {...register('email')}
         error={errors.email?.message}
-        placeholder="Enter your email"
+        placeholder={isLogin ? "you@company.com" : "you@company.com"}
       />
 
       <div className="relative">
@@ -107,7 +104,8 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
           type={showPassword ? 'text' : 'password'}
           {...register('password')}
           error={errors.password?.message}
-          placeholder="Enter your password"
+          placeholder={isLogin ? "Enter your password" : "Create a strong password"}
+          helperText={!isLogin ? "Must be at least 8 characters with 1 uppercase and 1 number" : undefined}
           rightIcon={
             <button
               type="button"
@@ -122,6 +120,13 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
             </button>
           }
         />
+        {isLogin && (
+          <div className="text-right mt-1">
+            <a href="/forgot-password" className="text-sm text-primary hover:text-primary-hover">
+              Forgot password?
+            </a>
+          </div>
+        )}
       </div>
 
       {!isLogin && (
@@ -151,12 +156,12 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
 
       {!isLogin && (
         <div>
-          <label className="block text-sm font-medium text-secondary-700 mb-1">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
             Preferred Language
           </label>
           <select
             {...register('preferredLanguage')}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="input-field"
           >
             <option value="">Select a language</option>
             {availableLanguages.map((language) => (
@@ -165,8 +170,11 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
               </option>
             ))}
           </select>
+          <p className="mt-1 text-sm text-gray-600">
+            This will be your default language for viewing contracts
+          </p>
           {(errors as any).preferredLanguage && (
-            <p className="mt-1 text-sm text-red-600">{(errors as any).preferredLanguage.message}</p>
+            <p className="mt-1 text-sm text-error">{(errors as any).preferredLanguage.message}</p>
           )}
         </div>
       )}
@@ -179,18 +187,6 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
         {isLogin ? 'Sign In' : 'Create Account'}
       </Button>
 
-      <div className="text-center">
-        <p className="text-sm text-secondary-600">
-          {isLogin ? "Don't have an account?" : 'Already have an account?'}
-          <button
-            type="button"
-            onClick={handleToggleMode}
-            className="ml-1 font-medium text-primary-600 hover:text-primary-500"
-          >
-            {isLogin ? 'Sign up' : 'Sign in'}
-          </button>
-        </p>
-      </div>
     </form>
   );
 }
