@@ -74,13 +74,13 @@ export default function CreateContract() {
     }
   });
 
-  const handleTranslate = useCallback(async (text: string, targetLanguage: string): Promise<string> => {
+  const handleTranslate = useCallback(async (text: string, targetLanguage: string, htmlContent?: string): Promise<string> => {
     if (!aiCapabilities.overall) {
       throw new Error('Chrome AI features are not available in this browser environment.');
     }
     try {
-      console.log('[CreateContract] Starting translation:', { text: text.substring(0, 50) + '...', targetLanguage });
-      const result = await translateText(text, targetLanguage, 'auto');
+      console.log('[CreateContract] Starting translation:', { text: text.substring(0, 50) + '...', targetLanguage, hasHTML: !!htmlContent });
+      const result = await translateText(text, targetLanguage, 'auto', htmlContent);
       console.log('[CreateContract] Translation result:', result);
       
       if (result.success && result.result) {
@@ -110,9 +110,9 @@ export default function CreateContract() {
       
       if (result.success) {
         // Show warning if validation detected potential issues
-        if (result.warning) {
-          toast.warning(result.warning);
-        }
+                if (result.warning) {
+                  toast.error(result.warning);
+                }
         
         // Return the corrected text if available, otherwise return original text
         return result.result || text;
@@ -290,13 +290,13 @@ export default function CreateContract() {
               content={contractContent}
               onChange={handleContentChange}
               placeholder="Start writing your contract content here. Use the AI tools to translate, proofread, or rewrite selected text."
-              onTranslate={async (text: string) => {
-                const target = window.prompt('Translate to (language code, e.g., en, es, fr, de):', 'en');
+              onTranslate={async (text: string, targetLanguage: string, htmlContent?: string) => {
+                const target = window.prompt('Translate to (language code, e.g., en, es, fr, de):', targetLanguage || 'en');
                 if (!target) {
                   throw new Error('Translation cancelled: no target language provided');
                 }
                 console.debug('[UI][translate] targetLanguage', target);
-                return handleTranslate(text, target);
+                return handleTranslate(text, target, htmlContent);
               }}
               onProofread={handleProofread}
               onRewrite={handleRewrite}

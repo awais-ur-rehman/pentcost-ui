@@ -2,6 +2,13 @@ import { useCallback, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Heading from '@tiptap/extension-heading';
+import Underline from '@tiptap/extension-underline';
+import Strike from '@tiptap/extension-strike';
+import Code from '@tiptap/extension-code';
+import CodeBlock from '@tiptap/extension-code-block';
+import Blockquote from '@tiptap/extension-blockquote';
+import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import { 
   BoldIcon, 
   ItalicIcon, 
@@ -9,7 +16,10 @@ import {
   NumberedListIcon,
   LanguageIcon,
   PencilIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  MinusIcon,
+  CodeBracketIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 import { Button } from '../common/Button';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -38,7 +48,7 @@ interface RichTextEditorProps {
   onChange?: (content: string) => void;
   placeholder?: string;
   className?: string;
-  onTranslate?: (text: string, targetLanguage: string) => Promise<string>;
+  onTranslate?: (text: string, targetLanguage: string, htmlContent?: string) => Promise<string>;
   onProofread?: (text: string) => Promise<any>;
   onRewrite?: (text: string) => Promise<string>;
 }
@@ -63,6 +73,15 @@ export function RichTextEditor({
       Placeholder.configure({
         placeholder,
       }),
+      Heading.configure({
+        levels: [1, 2, 3, 4, 5, 6],
+      }),
+      Underline,
+      Strike,
+      Code,
+      CodeBlock,
+      Blockquote,
+      HorizontalRule,
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -85,7 +104,14 @@ export function RichTextEditor({
 
     setIsTranslating(true);
     try {
-      const translatedText = await onTranslate(selectedText, 'en');
+      // Get the HTML content of the selected text to preserve formatting
+      const selectedHTML = editor.getHTML().substring(
+        editor.state.selection.from,
+        editor.state.selection.to
+      );
+      
+      // Send plain text for translation but preserve HTML structure
+      const translatedText = await onTranslate(selectedText, 'en', selectedHTML);
       
       // Clean the translated text to remove any encoding issues
       const cleanedText = cleanText(translatedText);
@@ -119,13 +145,15 @@ export function RichTextEditor({
     setIsTranslating(true);
     try {
       const entireText = editor.getText();
+      const entireHTML = editor.getHTML();
       
       if (!entireText.trim()) {
         toast.error('No content to translate');
         return;
       }
       
-      const translatedText = await onTranslate(entireText, 'en');
+      // Send plain text for translation but preserve HTML structure
+      const translatedText = await onTranslate(entireText, 'en', entireHTML);
       
       // Clean the translated text to remove any encoding issues
       const cleanedText = cleanText(translatedText);
@@ -244,39 +272,113 @@ export function RichTextEditor({
       {/* Toolbar */}
       <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center space-x-2">
-          {/* Basic formatting */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={editor.isActive('bold') ? 'bg-gray-200' : ''}
-          >
-            <BoldIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={editor.isActive('italic') ? 'bg-gray-200' : ''}
-          >
-            <ItalicIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={editor.isActive('bulletList') ? 'bg-gray-200' : ''}
-          >
-            <ListBulletIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={editor.isActive('orderedList') ? 'bg-gray-200' : ''}
-          >
-            <NumberedListIcon className="h-4 w-4" />
-          </Button>
+          {/* Headings */}
+          <div className="flex items-center space-x-1 border-r border-gray-300 pr-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              className={editor.isActive('heading', { level: 1 }) ? 'bg-gray-200' : ''}
+            >
+              H1
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className={editor.isActive('heading', { level: 2 }) ? 'bg-gray-200' : ''}
+            >
+              H2
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              className={editor.isActive('heading', { level: 3 }) ? 'bg-gray-200' : ''}
+            >
+              H3
+            </Button>
+          </div>
+
+          {/* Text formatting */}
+          <div className="flex items-center space-x-1 border-r border-gray-300 pr-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={editor.isActive('bold') ? 'bg-gray-200' : ''}
+            >
+              <BoldIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={editor.isActive('italic') ? 'bg-gray-200' : ''}
+            >
+              <ItalicIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              className={editor.isActive('underline') ? 'bg-gray-200' : ''}
+            >
+              <span className="underline">U</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              className={editor.isActive('strike') ? 'bg-gray-200' : ''}
+            >
+              <span className="line-through">S</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              className={editor.isActive('code') ? 'bg-gray-200' : ''}
+            >
+              <CodeBracketIcon className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Lists and structure */}
+          <div className="flex items-center space-x-1 border-r border-gray-300 pr-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              className={editor.isActive('bulletList') ? 'bg-gray-200' : ''}
+            >
+              <ListBulletIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              className={editor.isActive('orderedList') ? 'bg-gray-200' : ''}
+            >
+              <NumberedListIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              className={editor.isActive('blockquote') ? 'bg-gray-200' : ''}
+            >
+              <ChatBubbleLeftRightIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            >
+              <MinusIcon className="h-4 w-4" />
+            </Button>
+          </div>
+
         </div>
 
         {/* AI Tools */}
